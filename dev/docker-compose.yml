@@ -17,9 +17,6 @@ x-microservice-base: &microservice-base
     resources:
       limits:
         memory: 612M
-  depends_on:
-    configserver:
-      condition: service_healthy
 
 services:
   #Database docker configuration
@@ -122,6 +119,8 @@ services:
       SPRING_DATASOURCE_URL: "jdbc:mysql://accountsdb:3306/accountsdb"
       MYSQL_DATABASE: "accountsdb"
     depends_on:
+      configserver:
+        condition: service_healthy
       accountsdb:
         condition: service_healthy
 
@@ -137,6 +136,8 @@ services:
       SPRING_DATASOURCE_URL: "jdbc:mysql://loansdb:3306/loansdb"
       MYSQL_DATABASE: "loansdb"
     depends_on:
+      configserver:
+        condition: service_healthy
       loansdb:
         condition: service_healthy
 
@@ -152,6 +153,8 @@ services:
       SPRING_DATASOURCE_URL: "jdbc:mysql://cardsdb:3306/cardsdb"
       MYSQL_DATABASE: "cardsdb"
     depends_on:
+      configserver:
+        condition: service_healthy
       cardsdb:
         condition: service_healthy
 
