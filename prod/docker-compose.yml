@@ -1,0 +1,164 @@
+# YAML anchors for configuration reuse
+x-network-config: &network-config
+  networks:
+    - haidarmajd
+
+x-base-environment: &base-environment
+  SPRING_PROFILES_ACTIVE: "prod"
+  SPRING_CONFIG_IMPORT: "configserver:http://configserver:8888"
+  SPRING_RABBITMQ_HOST: "rabbit"
+  SPRING_DATASOURCE_USERNAME: "root"
+  SPRING_DATASOURCE_PASSWORD: "root"
+  MYSQL_ROOT_PASSWORD: "root"
+
+x-microservice-base: &microservice-base
+  <<: *network-config
+  deploy:
+    resources:
+      limits:
+        memory: 612M
+
+services:
+  #Database docker configuration
+  accountsdb:
+    <<: *network-config
+    image: mysql
+    container_name: accountsdb
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: accountsdb
+
+  cardsdb:
+    <<: *network-config
+    image: mysql
+    container_name: cardsdb
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cardsdb   
+
+  loansdb:
+    <<: *network-config
+    image: mysql
+    container_name: loansdb
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: loansdb
+
+  #RabbitMQ and Microservices docker configuration
+  rabbit:
+    <<: *network-config
+    image: rabbitmq:latest
+    container_name: rabbitmq_message_broker
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  #Config server docker configuration
+  configserver:
+    <<: *network-config
+    image: haidarmajd/configserver:t2
+    container_name: config_server
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: "curl --fail --silent http://localhost:8888/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 612M
+    environment:
+        SPRING_RABBITMQ_HOST: "rabbit"
+
+  #List of services and their related configurations
+  accounts:
+    <<: *microservice-base
+    image: haidarmajd/accounts:t2
+    container_name: accounts_service
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *base-environment
+      SPRING_APPLICATION_NAME: "accounts"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://accountsdb:3306/accountsdb"
+      MYSQL_DATABASE: "accountsdb"
+    depends_on:
+      configserver:
+        condition: service_healthy
+      accountsdb:
+        condition: service_healthy
+
+  loans:
+    <<: *microservice-base
+    image: haidarmajd/loans:t2
+    container_name: loans_service
+    ports:
+      - "8090:8090"
+    environment:
+      <<: *base-environment
+      SPRING_APPLICATION_NAME: "loans"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://loansdb:3306/loansdb"
+      MYSQL_DATABASE: "loansdb"
+    depends_on:
+      configserver:
+        condition: service_healthy
+      loansdb:
+        condition: service_healthy
+
+  cards:
+    <<: *microservice-base
+    image: haidarmajd/cards:t2
+    container_name: cards_service
+    ports:
+      - "9000:9000"
+    environment:
+      <<: *base-environment
+      SPRING_APPLICATION_NAME: "cards"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://cardsdb:3306/cardsdb"
+      MYSQL_DATABASE: "cardsdb"
+    depends_on:
+      configserver:
+        condition: service_healthy
+      cardsdb:
+        condition: service_healthy
+
+  
+networks:
+  haidarmajd:
+    driver: bridge
